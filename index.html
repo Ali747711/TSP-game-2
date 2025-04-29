@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TSP Game: The Route Challenge</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.7.1/gsap.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>TRAVELING SALESMAN PROBLEM</h1>
+        </header>
+        
+        <main>
+            <div id="globe-container"></div>
+            
+            <div class="ui-overlay">
+                <div class="tooltip" id="country-tooltip">Ukraine</div>
+                
+                <div class="info-panel">
+                    <div class="path-display">
+                        <h3>PATH:</h3>
+                        <p id="path-sequence">Start your journey</p>
+                    </div>
+                    
+                    <div class="stats-display">
+                        <div>
+                            <span>DISTANCE:</span>
+                            <span id="total-distance">0 km</span>
+                        </div>
+                        <div>
+                            <span>ENERGY:</span>
+                            <span id="total-energy">0 units</span>
+                        </div>
+                        <div>
+                            <span>COUNTRIES:</span>
+                            <span id="countries-visited">0</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="control-panel">
+                    <button id="reset-btn" class="glow-button">RESET</button>
+                    <button id="optimize-btn" class="glow-button">OPTIMIZE</button>
+                    <button id="complete-btn" class="glow-button">COMPLETE ROUTE</button>
+                </div>
+                
+                <div class="help-panel">
+                    <p>Click on countries to create your route. Visit all countries once and return to start.</p>
+                </div>
+            </div>
+        </main>
+        
+        <div class="modal" id="completion-modal">
+            <div class="modal-content">
+                <h2>Route Complete!</h2>
+                <div class="result-content">
+                    <p>Total Distance: <span id="result-distance">0 km</span></p>
+                    <p>Energy Units Used: <span id="result-energy">0</span></p>
+                    <p>Countries Visited: <span id="result-countries">0</span></p>
+                    <p>Your Path: <span id="result-path"></span></p>
+                </div>
+                <button id="new-game-btn" class="glow-button">NEW GAME</button>
+            </div>
+        </div>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>
