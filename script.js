@@ -76,152 +76,95 @@ document.addEventListener('DOMContentLoaded', () => {
         // Create scene
         scene = new THREE.Scene();
         scene.background = new THREE.Color(0x0a0e17);
-    
+
         // Create camera
         camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
         camera.position.z = 250;
-    
+
         // Create renderer
         renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(window.devicePixelRatio);
         globeContainer.appendChild(renderer.domElement);
-    
+
         // Create raycaster for mouse interaction
         raycaster = new THREE.Raycaster();
         mouse = new THREE.Vector2();
-    
-        // TEMPORARY SOLUTION: Let's skip OrbitControls entirely and focus on basic functionality
-        // Create a simple rotation handler
-        let isDragging = false;
-        let previousMousePosition = { x: 0, y: 0 };
+
+        // Add OrbitControls for 360° user control
+        controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableZoom = true;
+        controls.enablePan = true;
+        controls.enableRotate = true;
+        controls.minPolarAngle = 0;
+        controls.maxPolarAngle = Math.PI;
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.1;
+        controls.rotateSpeed = 0.7;
         
-        renderer.domElement.addEventListener('mousedown', (e) => {
-            isDragging = true;
-            previousMousePosition = { x: e.clientX, y: e.clientY };
-        });
-        
-        renderer.domElement.addEventListener('mouseup', () => {
-            isDragging = false;
-        });
-        
-        renderer.domElement.addEventListener('mouseleave', () => {
-            isDragging = false;
-        });
-        
-        renderer.domElement.addEventListener('mousemove', (e) => {
-            if (isDragging) {
-                const deltaMove = {
-                    x: e.clientX - previousMousePosition.x,
-                    y: e.clientY - previousMousePosition.y
-                };
-                
-                // Calculate rotation
-                globe.rotation.y += deltaMove.x * 0.01;
-                globe.rotation.x += deltaMove.y * 0.01;
-                
-                previousMousePosition = { x: e.clientX, y: e.clientY };
-            }
-        });
-        
-        // Create dummy controls for compatibility with the rest of the code
-        controls = {
-            update: function() {},
-            target: new THREE.Vector3(),
-            autoRotate: false,
-            enableZoom: true,
-            enablePan: true,
-            enableRotate: true,
-            addEventListener: function() {}
+        // Configure mouse buttons for OrbitControls
+        controls.mouseButtons = {
+            LEFT: THREE.MOUSE.ROTATE,
+            MIDDLE: THREE.MOUSE.DOLLY,
+            RIGHT: THREE.MOUSE.PAN
         };
-    
+
+        // Disable auto-rotation initially
+        controls.autoRotate = false;
+        controls.autoRotateSpeed = 0.5;
+
         // Create ambient light
         const ambientLight = new THREE.AmbientLight(0x404040, 1);
         scene.add(ambientLight);
-    
+
         // Create directional light
         const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
         directionalLight.position.set(1, 1, 1);
         scene.add(directionalLight);
-    
+
         // Add point lights at different positions for more dynamic lighting
         const pointLight1 = new THREE.PointLight(0x00e5ff, 1, 300);
         pointLight1.position.set(150, 100, 50);
         scene.add(pointLight1);
-    
+
         const pointLight2 = new THREE.PointLight(0xff00ff, 0.8, 300);
         pointLight2.position.set(-100, -50, 150);
         scene.add(pointLight2);
-    
+
         // Create globe
         createGlobe();
-    
+
         // Create country nodes
         createNodes();
-    
+
         // Add event listeners
         window.addEventListener('resize', onWindowResize);
         renderer.domElement.addEventListener('mousemove', onMouseMove);
+        renderer.domElement.addEventListener('click', onMouseClick);
         
-        // IMPORTANT: Modify this to use a separate click handler
-        renderer.domElement.addEventListener('click', onSimpleClick);
-    
+        // Listen for control events
+        controls.addEventListener('start', () => {
+            gameState.isDragging = true;
+            controls.autoRotate = false;
+        });
+        
+        controls.addEventListener('end', () => {
+            gameState.isDragging = false;
+            if (gameState.isAutoRotating) {
+                setTimeout(() => {
+                    if (!gameState.isDragging) {
+                        controls.autoRotate = true;
+                    }
+                }, 2000); // Resume auto-rotation after 2 seconds of inactivity
+            }
+        });
+
         // Initialize path line for drawing
         initPathLine();
         
         // Show initial loading animation
         simulateLoading();
     }
-
-    // Add this new simplified click handler
-    function onSimpleClick(event) {
-        if (gameState.isComplete) return;
-        
-        // Calculate mouse position
-        mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-        mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-        
-        // Get clicked node
-        raycaster.setFromCamera(mouse, camera);
-        const intersects = raycaster.intersectObjects(nodes);
-        
-        if (intersects.length > 0) {
-            // We found a clicked node!
-            console.log("Node clicked:", intersects[0].object.userData.name);
-            
-            const clickedNode = intersects[0].object;
-            const nodeId = clickedNode.userData.id;
-            
-            // Check if node is already selected
-            if (gameState.path.includes(nodeId)) {
-                return;
-            }
-            
-            // Select node
-            selectNode(clickedNode);
-            
-            // Smooth rotation to center on selected node
-            const position = clickedNode.position.clone();
-            const targetRotation = new THREE.Euler().setFromVector3(position);
-            
-            gsap.to(globe.rotation, {
-                x: -position.y * 0.01,
-                y: position.x * 0.01,
-                duration: 1,
-                ease: "power2.out"
-            });
-            
-            // Update path
-            updatePath();
-            
-            // Update the active path line
-            updatePathLine();
-            
-            // Play sound effect
-            playSelectSound();
-        }
-    }
-
 
     // Create the globe with loading handlers
     function createGlobe() {
@@ -998,10 +941,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function animate() {
         requestAnimationFrame(animate);
         
-        // Simple auto-rotation if enabled
-        if (gameState.isAutoRotating && !gameState.isDragging) {
-            globe.rotation.y += 0.001;
-        }
+        // Update controls
+        controls.update();
         
         // Rotate all visible selection rings to face the camera
         rings.forEach(ring => {
