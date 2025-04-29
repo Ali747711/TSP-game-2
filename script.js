@@ -92,7 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
         mouse = new THREE.Vector2();
 
         // Add OrbitControls for 360° user control
-        controls = new OrbitControls(camera, renderer.domElement);
+        controls = new THREE.OrbitControls(camera, renderer.domElement);
         controls.enableZoom = true;
         controls.enablePan = true;
         controls.enableRotate = true;
