@@ -101,6 +101,13 @@ document.addEventListener('DOMContentLoaded', () => {
         controls.enableDamping = true;
         controls.dampingFactor = 0.1;
         controls.rotateSpeed = 0.7;
+        
+        // Configure mouse buttons for OrbitControls
+        controls.mouseButtons = {
+            LEFT: THREE.MOUSE.ROTATE,
+            MIDDLE: THREE.MOUSE.DOLLY,
+            RIGHT: THREE.MOUSE.PAN
+        };
 
         // Disable auto-rotation initially
         controls.autoRotate = false;
@@ -266,6 +273,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const nodeMaterial = new THREE.MeshBasicMaterial({ color: country.color });
             const node = new THREE.Mesh(nodeGeometry, nodeMaterial);
             node.position.copy(position);
+            node.renderOrder = 10; // Ensure nodes render on top
             node.userData = {
                 id: country.id,
                 name: country.name,
@@ -290,6 +298,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             const ring = new THREE.Mesh(ringGeometry, ringMaterial);
             ring.position.copy(position);
+            ring.renderOrder = 11; // Ensure rings render on top of nodes
             
             // Orient ring to face camera
             const lookAt = position.clone().multiplyScalar(2);
@@ -480,50 +489,57 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Handle mouse click
+    // Handle mouse click - fixed version
     function onMouseClick(event) {
         if (gameState.isComplete) return;
+        
+        // Calculate mouse position again to ensure accuracy
+        mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
         
         // Stop auto-rotation on click
         controls.autoRotate = false;
         
-        // Get clicked node
-        raycaster.setFromCamera(mouse, camera);
-        const intersects = raycaster.intersectObjects(nodes);
-        
-        if (intersects.length > 0) {
-            const clickedNode = intersects[0].object;
-            const nodeId = clickedNode.userData.id;
+        // Use setTimeout to ensure the click is processed after controls
+        setTimeout(() => {
+            // Get clicked node
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(nodes);
             
-            // Check if node is already selected
-            if (gameState.path.includes(nodeId)) {
-                return;
+            if (intersects.length > 0) {
+                const clickedNode = intersects[0].object;
+                const nodeId = clickedNode.userData.id;
+                
+                // Check if node is already selected
+                if (gameState.path.includes(nodeId)) {
+                    return;
+                }
+                
+                // Select node
+                selectNode(clickedNode);
+                
+                // Rotate globe to center on selected node
+                rotateGlobeToNode(clickedNode);
+                
+                // Update path
+                updatePath();
+                
+                // Update the active path line
+                updatePathLine();
+                
+                // Play sound effect
+                playSelectSound();
+                
+                // Resume auto-rotation after a delay if enabled
+                if (gameState.isAutoRotating) {
+                    setTimeout(() => {
+                        if (!gameState.isDragging) {
+                            controls.autoRotate = true;
+                        }
+                    }, 5000); // Resume after 5 seconds
+                }
             }
-            
-            // Select node
-            selectNode(clickedNode);
-            
-            // Rotate globe to center on selected node
-            rotateGlobeToNode(clickedNode);
-            
-            // Update path
-            updatePath();
-            
-            // Update the active path line
-            updatePathLine();
-            
-            // Play sound effect
-            playSelectSound();
-            
-            // Resume auto-rotation after a delay if enabled
-            if (gameState.isAutoRotating) {
-                setTimeout(() => {
-                    if (!gameState.isDragging) {
-                        controls.autoRotate = true;
-                    }
-                }, 5000); // Resume after 5 seconds
-            }
-        }
+        }, 10); // Small delay to ensure proper event handling
     }
 
     // Select a node
@@ -757,6 +773,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         // Get first and last nodes
+        // Complete the route (return to start) - continuation
         const firstNode = gameState.selectedCountries[0];
         const lastNode = gameState.selectedCountries[gameState.selectedCountries.length - 1];
         
@@ -771,6 +788,7 @@ document.addEventListener('DOMContentLoaded', () => {
             firstNode.lng
         );
         
+        gameState.totalDistance += finalDistance;
         gameState.energyUsed += Math.round(finalDistance / 100);
         
         // Add first node to path again
