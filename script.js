@@ -226,14 +226,14 @@ document.addEventListener('DOMContentLoaded', () => {
         );
         
         const bumpTexture = textureLoader.load(
-            'https://cdn.jsdelivr.net/gh/dragonir/3d/src/Earth/images/elev_bump_16k.jpg',
+            'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_normal_2048.jpg',
             updateLoadingProgress,
             undefined,
             onTextureError
         );
         
         const specularTexture = textureLoader.load(
-            'https://cdn.jsdelivr.net/gh/dragonir/3d/src/Earth/images/water_16k.png',
+            'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_specular_2048.jpg',,
             updateLoadingProgress,
             undefined,
             onTextureError
