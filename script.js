@@ -99,8 +99,8 @@ document.addEventListener('DOMContentLoaded', () => {
         raycaster = new THREE.Raycaster();
         mouse = new THREE.Vector2();
 
-        // Add OrbitControls for 360° user control - FIXED: proper reference to OrbitControls
-        controls = new OrbitControls(camera, renderer.domElement);
+        // Add OrbitControls for 360° user control - CORRECTED: Using THREE.OrbitControls
+        controls = new THREE.OrbitControls(camera, renderer.domElement);
         controls.enableZoom = true;
         controls.enablePan = true;
         controls.enableRotate = true;
@@ -587,6 +587,43 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 10); // Small delay to ensure proper event handling
     }
 
+    // Play sound effect when selecting node - using shared AudioContext
+    function playSelectSound() {
+        // Skip if AudioContext couldn't be created
+        if (!audioContext) return;
+        
+        try {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(440, audioContext.currentTime);
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            
+            oscillator.start();
+            
+            // Add frequency modulation for more interesting sound
+            oscillator.frequency.exponentialRampToValueAtTime(
+                880, 
+                audioContext.currentTime + 0.1
+            );
+            
+            // Add fade out
+            gainNode.gain.exponentialRampToValueAtTime(
+                0.001,
+                audioContext.currentTime + 0.3
+            );
+            
+            oscillator.stop(audioContext.currentTime + 0.3);
+        } catch (error) {
+            console.error("Error playing sound:", error);
+        }
+    }
+
+    // The rest of the code remains unchanged...
     // Select a node
     function selectNode(node) {
         // Mark node as selected
@@ -949,42 +986,6 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Complete route back to start
         completeRoute();
-    }
-
-    // Play sound effect when selecting node - using shared AudioContext
-    function playSelectSound() {
-        // Skip if AudioContext couldn't be created
-        if (!audioContext) return;
-        
-        try {
-            const oscillator = audioContext.createOscillator();
-            const gainNode = audioContext.createGain();
-            
-            oscillator.connect(gainNode);
-            gainNode.connect(audioContext.destination);
-            
-            oscillator.type = 'sine';
-            oscillator.frequency.setValueAtTime(440, audioContext.currentTime);
-            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-            
-            oscillator.start();
-            
-            // Add frequency modulation for more interesting sound
-            oscillator.frequency.exponentialRampToValueAtTime(
-                880, 
-                audioContext.currentTime + 0.1
-            );
-            
-            // Add fade out
-            gainNode.gain.exponentialRampToValueAtTime(
-                0.001,
-                audioContext.currentTime + 0.3
-            );
-            
-            oscillator.stop(audioContext.currentTime + 0.3);
-        } catch (error) {
-            console.error("Error playing sound:", error);
-        }
     }
 
     // Animation loop
