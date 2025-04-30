@@ -174,6 +174,18 @@ document.addEventListener('DOMContentLoaded', () => {
         // Initialize path line for drawing
         initPathLine();
         
+        // Event listeners for buttons
+        resetBtn.addEventListener('click', resetGame);
+        optimizeBtn.addEventListener('click', optimizeRoute);
+        completeBtn.addEventListener('click', completeRoute);
+        
+        // Specific handler for newGameBtn with logging
+        newGameBtn.addEventListener('click', () => {
+            console.log("New Game button clicked");
+            resetGame();
+            completionModal.classList.remove('active');
+        });
+        
         // Show initial loading animation
         simulateLoading();
     }
@@ -318,7 +330,7 @@ document.addEventListener('DOMContentLoaded', () => {
         countryNodes.forEach((country, index) => {
             if (nodes[index]) {
                 const position = nodes[index].position.clone();
-                const hitboxGeometry = new THREE.SphereGeometry(NODE_RADIUS * 4, 8, 8);
+                const hitboxGeometry = new THREE.SphereGeometry(NODE_RADIUS * 8, 8, 8); // Much larger hitbox
                 const hitboxMaterial = new THREE.MeshBasicMaterial({
                     color: 0xffffff,
                     transparent: true,
@@ -329,7 +341,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const hitbox = new THREE.Mesh(hitboxGeometry, hitboxMaterial);
                 hitbox.position.copy(position);
                 hitbox.renderOrder = 200; // Highest render order
-                hitbox.userData = nodes[index].userData; // Copy userData from original node
+                hitbox.userData = {...nodes[index].userData}; // Copy userData from original node
                 
                 scene.add(hitbox);
                 // Add hitbox to nodes array so it's included in raycaster checks
@@ -451,8 +463,8 @@ document.addEventListener('DOMContentLoaded', () => {
             glow.renderOrder = 5; // Lower render order
             scene.add(glow);
             
-            // Create node with LARGER radius for easier clicking
-            const nodeGeometry = new THREE.SphereGeometry(NODE_RADIUS * 1.5, 16, 16);
+            // Create node with MUCH LARGER radius for easier clicking
+            const nodeGeometry = new THREE.SphereGeometry(NODE_RADIUS * 2.5, 16, 16);
             const nodeMaterial = new THREE.MeshBasicMaterial({ 
                 color: country.color,
                 depthWrite: true
@@ -474,7 +486,7 @@ document.addEventListener('DOMContentLoaded', () => {
             nodes.push(node);
             
             // Create selection ring (initially hidden)
-            const ringGeometry = new THREE.RingGeometry(NODE_RADIUS + 1, NODE_RADIUS + 2, 32);
+            const ringGeometry = new THREE.RingGeometry(NODE_RADIUS + 2, NODE_RADIUS + 3, 32);
             const ringMaterial = new THREE.MeshBasicMaterial({ 
                 color: SELECTED_COLOR,
                 side: THREE.DoubleSide,
@@ -709,7 +721,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const originalNodeIndex = nodes.findIndex(n => 
             n.userData.id === node.userData.id && 
             n.geometry.type === "SphereGeometry" && 
-            n.geometry.parameters.radius === NODE_RADIUS * 1.5
+            n.geometry.parameters.radius === NODE_RADIUS * 2.5
         );
         
         const nodeToUse = originalNodeIndex !== -1 ? nodes[originalNodeIndex] : node;
@@ -764,22 +776,35 @@ document.addEventListener('DOMContentLoaded', () => {
         updateUI(true);
     }
 
-    // Add line between nodes with animated drawing
-    function addLine(startPos, endPos) {
-        const material = new THREE.LineBasicMaterial({
-            color: gameState.selectedCountries.length % 2 === 0 ? LINE_COLOR : SELECTED_LINE_COLOR,
-            linewidth: 2
-        });
-        
-        const points = [];
-        points.push(startPos);
-        
-        // Add curve to line
-        const midPoint = new THREE.Vector3().addVectors(startPos, endPos).multiplyScalar(0.5);
-        midPoint.normalize();
-        midPoint.multiplyScalar(GLOBE_RADIUS * 1.2);
-        points.push(midPoint);
-        points.push(endPos);
+    // Add line between nodes with animated drawing - improved to go around globe
+    // Add line between nodes with animated drawing - improved to go around globe
+   function addLine(startPos, endPos) {
+       const material = new THREE.LineBasicMaterial({
+           color: gameState.selectedCountries.length % 2 === 0 ? LINE_COLOR : SELECTED_LINE_COLOR,
+           linewidth: 2
+       });
+       
+       const points = [];
+       points.push(startPos.clone());
+       
+       // Calculate better curve points to ensure lines go around the globe
+       // Use more intermediate points and make them higher above the globe surface
+       const numIntermediatePoints = 3; // More intermediate points for smoother curve
+       
+       for (let i = 1; i <= numIntermediatePoints; i++) {
+           // Create intermediate positions
+           const t = i / (numIntermediatePoints + 1);
+           const interpolatedPos = new THREE.Vector3().lerpVectors(startPos, endPos, t);
+           
+           // Push the intermediate point outward from the globe center
+           const distanceFromCenter = interpolatedPos.length();
+           const elevationFactor = 1.3; // Increase this to make lines higher above the surface
+           interpolatedPos.normalize().multiplyScalar(distanceFromCenter * elevationFactor);
+           
+           points.push(interpolatedPos);
+       }
+       
+       points.push(endPos.clone());
        
        const curvePoints = new THREE.CatmullRomCurve3(points).getPoints(50);
        const geometry = new THREE.BufferGeometry().setFromPoints(curvePoints);
@@ -1014,7 +1039,7 @@ document.addEventListener('DOMContentLoaded', () => {
        completionModal.classList.remove('active');
    }
 
-   // Show completion modal
+   // Show completion modal with fixed NEW GAME button
    function showCompletionModal() {
        resultDistance.textContent = `${Math.round(gameState.totalDistance)} km`;
        resultEnergy.textContent = gameState.energyUsed;
@@ -1027,6 +1052,14 @@ document.addEventListener('DOMContentLoaded', () => {
            duration: 0.5,
            onStart: () => {
                completionModal.classList.add('active');
+               
+               // Ensure the new game button works by adding a fresh event listener
+               newGameBtn.removeEventListener('click', resetGame); // Remove old listener if exists
+               newGameBtn.addEventListener('click', () => {
+                   console.log("New Game button clicked");
+                   resetGame();
+                   completionModal.classList.remove('active');
+               });
            }
        });
    }
@@ -1057,7 +1090,7 @@ document.addEventListener('DOMContentLoaded', () => {
            node.userData.id !== startNode.userData.id &&
            // Only include actual nodes, not hitboxes
            node.geometry.type === "SphereGeometry" && 
-           node.geometry.parameters.radius === NODE_RADIUS * 1.5
+           node.geometry.parameters.radius === NODE_RADIUS * 2.5
        );
        
        while (remainingNodes.length > 0) {
@@ -1152,7 +1185,13 @@ document.addEventListener('DOMContentLoaded', () => {
    resetBtn.addEventListener('click', resetGame);
    optimizeBtn.addEventListener('click', optimizeRoute);
    completeBtn.addEventListener('click', completeRoute);
-   newGameBtn.addEventListener('click', resetGame);
+   
+   // Special handler for newGameBtn to ensure it works
+   newGameBtn.addEventListener('click', () => {
+       console.log("New Game button clicked");
+       resetGame();
+       completionModal.classList.remove('active');
+   });
 
    // Add auto-rotation toggle button
    const autoRotateBtn = document.createElement('button');
