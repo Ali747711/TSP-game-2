@@ -99,7 +99,7 @@ document.addEventListener('DOMContentLoaded', () => {
         raycaster = new THREE.Raycaster();
         mouse = new THREE.Vector2();
 
-        // Add OrbitControls for 360° user control - CORRECTED: Using THREE.OrbitControls
+        // Add OrbitControls for 360° user control
         controls = new THREE.OrbitControls(camera, renderer.domElement);
         controls.enableZoom = true;
         controls.enablePan = true;
@@ -139,8 +139,8 @@ document.addEventListener('DOMContentLoaded', () => {
         pointLight2.position.set(-100, -50, 150);
         scene.add(pointLight2);
 
-        // Create globe
-        createGlobe();
+        // Load simple globe texture
+        loadSimpleTextures();
 
         // Create country nodes
         createNodes();
@@ -174,85 +174,42 @@ document.addEventListener('DOMContentLoaded', () => {
         simulateLoading();
     }
 
-    // Create the globe with loading handlers
-    function createGlobe() {
+    // A simplified direct texture loading approach
+    function loadSimpleTextures() {
         const globeGeometry = new THREE.SphereGeometry(GLOBE_RADIUS, 64, 64);
         const textureLoader = new THREE.TextureLoader();
         
-        // Track loading progress
-        let loadedCount = 0;
-        const totalTextures = 3;
-        let hasLoadingError = false;
-        
-        const updateLoadingProgress = () => {
-            loadedCount++;
-            const progressFill = document.querySelector('.progress-fill');
-            const loadingText = document.querySelector('.loading-text');
-            const progress = loadedCount / totalTextures;
-            
-            if (progressFill) {
-                progressFill.style.width = `${progress * 100}%`;
-                loadingText.textContent = `Loading world data... ${Math.round(progress * 100)}%`;
-            }
-            
-            // If all textures loaded, check for errors
-            if (loadedCount === totalTextures && !hasLoadingError) {
-                // Continue loading process if no errors
-                setTimeout(() => {
-                    revealGlobe();
-                }, 1000);
-            }
-        };
-        
-        // Error handling for texture loading
-        const onTextureError = (err) => {
-            console.error('Error loading texture:', err);
-            hasLoadingError = true;
-            
-            // Show error message in loading screen
-            const loadingText = document.querySelector('.loading-text');
-            if (loadingText) {
-                loadingText.textContent = 'Error loading textures. Please refresh the page.';
-                loadingText.style.color = '#ff0000';
-            }
-        };
-        
-        // Load textures with progress tracking and error handling
+        // Use a simple earth texture from a reliable source
         const globeTexture = textureLoader.load(
-            'https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-blue-marble.jpg',
-            updateLoadingProgress,
-            undefined, // onProgress is not used
-            onTextureError
-        );
-        
-        const bumpTexture = textureLoader.load(
-            'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_normal_2048.jpg',
-            updateLoadingProgress,
+            'https://threejs.org/examples/textures/planets/earth_atmos_2048.jpg',
+            () => {
+                console.log("Earth texture loaded successfully");
+                
+                // Create the globe with just the color texture
+                const globeMaterial = new THREE.MeshPhongMaterial({
+                    map: globeTexture,
+                    shininess: 15
+                });
+                
+                globe = new THREE.Mesh(globeGeometry, globeMaterial);
+                scene.add(globe);
+                
+                // Add atmosphere glow
+                addAtmosphereAndGrid();
+                
+                // Continue with the rest of the loading process
+                updateLoadingProgress(3, 3);
+            },
             undefined,
-            onTextureError
+            (error) => {
+                console.error("Failed to load simple earth texture:", error);
+                createSimplifiedGlobe();
+            }
         );
-        
-        const specularTexture = textureLoader.load(
-            'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_specular_2048.jpg',,
-            updateLoadingProgress,
-            undefined,
-            onTextureError
-        );
-        
-        const globeMaterial = new THREE.MeshPhongMaterial({
-            map: globeTexture,
-            bumpMap: bumpTexture,
-            bumpScale: 0.5,
-            specularMap: specularTexture,
-            specular: new THREE.Color(0x444444),
-            shininess: 15,
-            transparent: true,
-            opacity: 0.8
-        });
-        
-        globe = new THREE.Mesh(globeGeometry, globeMaterial);
-        scene.add(globe);
-
+    }
+    
+    // Add atmosphere and grid elements to the globe
+    function addAtmosphereAndGrid() {
         // Add atmosphere glow
         const atmosphereGeometry = new THREE.SphereGeometry(GLOBE_RADIUS + 2, 64, 64);
         const atmosphereMaterial = new THREE.ShaderMaterial({
@@ -288,41 +245,147 @@ document.addEventListener('DOMContentLoaded', () => {
         scene.add(grid);
     }
 
-    // Reveal globe with animation - separated from simulateLoading
+    // Create a simplified globe without external textures as a fallback
+    function createSimplifiedGlobe() {
+        // If globe already exists, remove it to avoid duplicates
+        if (globe) {
+            scene.remove(globe);
+        }
+        
+        console.log("Creating simplified globe as fallback");
+        
+        const globeGeometry = new THREE.SphereGeometry(GLOBE_RADIUS, 64, 64);
+        
+        // Create material with procedural colors instead of textures
+        const globeMaterial = new THREE.MeshPhongMaterial({
+            color: 0x2233aa,  // Blue base color
+            emissive: 0x112244,
+            specular: 0x333333,
+            shininess: 25,
+            transparent: true,
+            opacity: 0.9
+        });
+        
+        globe = new THREE.Mesh(globeGeometry, globeMaterial);
+        
+        // Ensure the globe is at the center of the scene
+        globe.position.set(0, 0, 0);
+        
+        // Make sure the globe is visible
+        globe.visible = true;
+        
+        // Add the globe to the scene
+        scene.add(globe);
+        
+        // Add atmosphere and grid
+        addAtmosphereAndGrid();
+        
+        // Add a wireframe overlay to provide some geographical reference
+        const wireframeGeometry = new THREE.SphereGeometry(GLOBE_RADIUS * 1.001, 36, 36);
+        const wireframeMaterial = new THREE.MeshBasicMaterial({
+            color: 0x00e5ff,
+            wireframe: true,
+            transparent: true,
+            opacity: 0.2
+        });
+        
+        const wireframe = new THREE.Mesh(wireframeGeometry, wireframeMaterial);
+        scene.add(wireframe);
+        
+        // Continue with the rest of the loading process
+        updateLoadingProgress(3, 3);
+    }
+    
+    // Update loading progress
+    function updateLoadingProgress(current, total) {
+        const progressFill = document.querySelector('.progress-fill');
+        const loadingText = document.querySelector('.loading-text');
+        const progress = current / total;
+        
+        if (progressFill) {
+            progressFill.style.width = `${progress * 100}%`;
+            loadingText.textContent = `Loading world data... ${Math.round(progress * 100)}%`;
+        }
+        
+        // If loading complete, reveal the globe
+        if (current >= total) {
+            setTimeout(() => {
+                revealGlobe();
+            }, 500);
+        }
+    }
+
+    // Reveal globe with animation
     function revealGlobe() {
         // Fade out loading screen
         const loadingScreen = document.querySelector('.loading-screen');
         if (loadingScreen) {
             loadingScreen.style.opacity = '0';
             
-            // Reveal globe with animation
-            globe.scale.set(0.01, 0.01, 0.01);
-            camera.position.z = 500;
-            
-            // Zoom in animation
-            gsap.to(globe.scale, {
-                x: 1,
-                y: 1,
-                z: 1,
-                duration: 2.5,
-                ease: "power2.out"
-            });
-            
-            gsap.to(camera.position, {
-                z: 250,
-                duration: 2.5,
-                ease: "power2.out",
-                onComplete: () => {
-                    // Start auto rotation after loading
-                    controls.autoRotate = true;
-                    gameState.isAutoRotating = true;
-                    
-                    // Remove loading screen from DOM
-                    setTimeout(() => {
-                        loadingScreen.remove();
-                    }, 1000);
-                }
-            });
+            // Ensure globe exists and is set to a very small scale initially
+            if (globe) {
+                console.log("Revealing globe with animation");
+                globe.scale.set(0.01, 0.01, 0.01);
+                
+                // Position camera further back for better zoom effect
+                camera.position.z = 500;
+                
+                // Zoom in animation
+                gsap.to(globe.scale, {
+                    x: 1,
+                    y: 1,
+                    z: 1,
+                    duration: 2.5,
+                    ease: "power2.out"
+                });
+                
+                gsap.to(camera.position, {
+                    z: 250,
+                    duration: 2.5,
+                    ease: "power2.out",
+                    onComplete: () => {
+                        // Start auto rotation after loading
+                        controls.autoRotate = true;
+                        gameState.isAutoRotating = true;
+                        
+                        // Remove loading screen from DOM
+                        setTimeout(() => {
+                            loadingScreen.remove();
+                        }, 1000);
+                    }
+                });
+            } else {
+                console.error("Globe not available for animation - creating emergency globe");
+                
+                // Emergency fallback - create a very basic globe if all else fails
+                const emergencyGeometry = new THREE.SphereGeometry(GLOBE_RADIUS, 32, 32);
+                const emergencyMaterial = new THREE.MeshBasicMaterial({
+                    color: 0x3366cc,
+                    wireframe: false
+                });
+                
+                globe = new THREE.Mesh(emergencyGeometry, emergencyMaterial);
+                scene.add(globe);
+                
+                // Start auto rotation after loading
+                controls.autoRotate = true;
+                gameState.isAutoRotating = true;
+                
+                // Remove loading screen
+                loadingScreen.remove();
+            }
+        }
+    }
+
+    // Simulate loading process to show progress bar
+    function simulateLoading() {
+        // Start with a small progress
+        const progressFill = document.querySelector('.progress-fill');
+        const loadingText = document.querySelector('.loading-text');
+        
+        if (progressFill && loadingText) {
+            progressFill.style.width = "5%";
+            loadingText.textContent = "Loading world data... 5%";
         }
     }
 
@@ -428,18 +491,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const z = radius * Math.sin(phi) * Math.sin(theta);
         
         return new THREE.Vector3(x, y, z);
-    }
-    
-    // Simulate loading process 
-    function simulateLoading() {
-        // Just start the loading progress - texture loading will determine completion
-        const progressFill = document.querySelector('.progress-fill');
-        const loadingText = document.querySelector('.loading-text');
-        
-        if (progressFill && loadingText) {
-            progressFill.style.width = "5%";
-            loadingText.textContent = "Loading world data... 5%";
-        }
     }
 
     // Animate glow effect
@@ -587,43 +638,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 10); // Small delay to ensure proper event handling
     }
 
-    // Play sound effect when selecting node - using shared AudioContext
-    function playSelectSound() {
-        // Skip if AudioContext couldn't be created
-        if (!audioContext) return;
-        
-        try {
-            const oscillator = audioContext.createOscillator();
-            const gainNode = audioContext.createGain();
-            
-            oscillator.connect(gainNode);
-            gainNode.connect(audioContext.destination);
-            
-            oscillator.type = 'sine';
-            oscillator.frequency.setValueAtTime(440, audioContext.currentTime);
-            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-            
-            oscillator.start();
-            
-            // Add frequency modulation for more interesting sound
-            oscillator.frequency.exponentialRampToValueAtTime(
-                880, 
-                audioContext.currentTime + 0.1
-            );
-            
-            // Add fade out
-            gainNode.gain.exponentialRampToValueAtTime(
-                0.001,
-                audioContext.currentTime + 0.3
-            );
-            
-            oscillator.stop(audioContext.currentTime + 0.3);
-        } catch (error) {
-            console.error("Error playing sound:", error);
-        }
-    }
-
-    // The rest of the code remains unchanged...
     // Select a node
     function selectNode(node) {
         // Mark node as selected
@@ -772,259 +786,295 @@ document.addEventListener('DOMContentLoaded', () => {
         // Update stats with optional animation
         if (animate) {
             // Animate distance counter
-            const prevDistance = parseFloat(totalDistance.textContent) || 0;
-            const distanceValue = Math.round(gameState.totalDistance);
-            animateCounter(totalDistance, prevDistance, distanceValue, ' km');
-            
-            // Animate energy counter
-            const prevEnergy = parseFloat(totalEnergy.textContent) || 0;
-            animateCounter(totalEnergy, prevEnergy, gameState.energyUsed, ' units');
-            
-            // Animate countries counter
-            const prevCountries = parseInt(countriesVisited.textContent) || 0;
-            animateCounter(countriesVisited, prevCountries, gameState.selectedCountries.length, '');
-        } else {
-            // Just update without animation
-            totalDistance.textContent = `${Math.round(gameState.totalDistance)} km`;
-            totalEnergy.textContent = `${gameState.energyUsed} units`;
-            countriesVisited.textContent = gameState.selectedCountries.length;
-        }
-    }
+           const prevDistance = parseFloat(totalDistance.textContent) || 0;
+           const distanceValue = Math.round(gameState.totalDistance);
+           animateCounter(totalDistance, prevDistance, distanceValue, ' km');
+           
+           // Animate energy counter
+           const prevEnergy = parseFloat(totalEnergy.textContent) || 0;
+           animateCounter(totalEnergy, prevEnergy, gameState.energyUsed, ' units');
+           
+           // Animate countries counter
+           const prevCountries = parseInt(countriesVisited.textContent) || 0;
+           animateCounter(countriesVisited, prevCountries, gameState.selectedCountries.length, '');
+       } else {
+           // Just update without animation
+           totalDistance.textContent = `${Math.round(gameState.totalDistance)} km`;
+           totalEnergy.textContent = `${gameState.energyUsed} units`;
+           countriesVisited.textContent = gameState.selectedCountries.length;
+       }
+   }
 
-    // Animate counter from start to end value
-    function animateCounter(element, start, end, suffix) {
-        const duration = 1; // seconds
-        const fps = 60;
-        const frames = duration * fps;
-        const increment = (end - start) / frames;
-        let current = start;
-        let frame = 0;
-        
-        const counterInterval = setInterval(() => {
-            frame++;
-            current += increment;
-            
-            if (frame >= frames) {
-                clearInterval(counterInterval);
-                current = end;
-            }
-            
-            element.textContent = `${Math.round(current)}${suffix}`;
-        }, 1000 / fps);
-    }
+   // Animate counter from start to end value
+   function animateCounter(element, start, end, suffix) {
+       const duration = 1; // seconds
+       const fps = 60;
+       const frames = duration * fps;
+       const increment = (end - start) / frames;
+       let current = start;
+       let frame = 0;
+       
+       const counterInterval = setInterval(() => {
+           frame++;
+           current += increment;
+           
+           if (frame >= frames) {
+               clearInterval(counterInterval);
+               current = end;
+           }
+           
+           element.textContent = `${Math.round(current)}${suffix}`;
+       }, 1000 / fps);
+   }
 
-    // Update path display
-    function updatePath() {
-        if (gameState.path.length === 0) {
-            pathSequence.textContent = "Start your journey";
-        } else {
-            pathSequence.textContent = gameState.path.join(" → ");
-        }
-    }
+   // Update path display
+   function updatePath() {
+       if (gameState.path.length === 0) {
+           pathSequence.textContent = "Start your journey";
+       } else {
+           pathSequence.textContent = gameState.path.join(" → ");
+       }
+   }
 
-    // Rotate globe to center on a node with smooth animation
-    function rotateGlobeToNode(node) {
-        const position = node.position.clone();
-        
-        // Calculate target quaternion for smooth rotation
-        const targetQuaternion = new THREE.Quaternion();
-        const up = new THREE.Vector3(0, 1, 0);
-        const lookAtMatrix = new THREE.Matrix4();
-        lookAtMatrix.lookAt(new THREE.Vector3(0, 0, 0), position.negate(), up);
-        targetQuaternion.setFromRotationMatrix(lookAtMatrix);
-        
-        // Animate camera to position
-        gsap.to(controls.target, {
-            x: position.x * 0.1,
-            y: position.y * 0.1,
-            z: position.z * 0.1,
-            duration: 1.5,
-            ease: "power2.out",
-            onUpdate: () => controls.update()
-        });
-        
-        // Make sure auto-rotation is paused during this animation
-        controls.autoRotate = false;
-    }
+   // Rotate globe to center on a node with smooth animation
+   function rotateGlobeToNode(node) {
+       const position = node.position.clone();
+       
+       // Calculate target quaternion for smooth rotation
+       const targetQuaternion = new THREE.Quaternion();
+       const up = new THREE.Vector3(0, 1, 0);
+       const lookAtMatrix = new THREE.Matrix4();
+       lookAtMatrix.lookAt(new THREE.Vector3(0, 0, 0), position.negate(), up);
+       targetQuaternion.setFromRotationMatrix(lookAtMatrix);
+       
+       // Animate camera to position
+       gsap.to(controls.target, {
+           x: position.x * 0.1,
+           y: position.y * 0.1,
+           z: position.z * 0.1,
+           duration: 1.5,
+           ease: "power2.out",
+           onUpdate: () => controls.update()
+       });
+       
+       // Make sure auto-rotation is paused during this animation
+       controls.autoRotate = false;
+   }
 
-    // Complete the route (return to start)
-    function completeRoute() {
-        if (gameState.selectedCountries.length < 2) {
-            alert("Please select at least 2 countries before completing route");
-            return;
-        }
-        
-        // Get first and last nodes
-        const firstNode = gameState.selectedCountries[0];
-        const lastNode = gameState.selectedCountries[gameState.selectedCountries.length - 1];
-        
-        // Add line from last to first
-        addLine(lastNode.position, firstNode.position);
-        
-        // Calculate final distance
-        const finalDistance = calculateHaversineDistance(
-            lastNode.lat,
-            lastNode.lng,
-            firstNode.lat,
-            firstNode.lng
-        );
-        
-        gameState.totalDistance += finalDistance;
-        gameState.energyUsed += Math.round(finalDistance / 100);
-        
-        // Add first node to path again
-        gameState.path.push(firstNode.id);
-        
-        // Update UI
-        updateUI(true);
-        
-        // Mark game as complete
-        gameState.isComplete = true;
-        
-        // Show completion modal
-        showCompletionModal();
-    }
+   // Complete the route (return to start)
+   function completeRoute() {
+       if (gameState.selectedCountries.length < 2) {
+           alert("Please select at least 2 countries before completing route");
+           return;
+       }
+       
+       // Get first and last nodes
+       const firstNode = gameState.selectedCountries[0];
+       const lastNode = gameState.selectedCountries[gameState.selectedCountries.length - 1];
+       
+       // Add line from last to first
+       addLine(lastNode.position, firstNode.position);
+       
+       // Calculate final distance
+       const finalDistance = calculateHaversineDistance(
+           lastNode.lat,
+           lastNode.lng,
+           firstNode.lat,
+           firstNode.lng
+       );
+       
+       gameState.totalDistance += finalDistance;
+       gameState.energyUsed += Math.round(finalDistance / 100);
+       
+       // Add first node to path again
+       gameState.path.push(firstNode.id);
+       
+       // Update UI
+       updateUI(true);
+       
+       // Mark game as complete
+       gameState.isComplete = true;
+       
+       // Show completion modal
+       showCompletionModal();
+   }
 
-    // Reset the game
-    function resetGame() {
-        // Reset game state
-        gameState.selectedCountries = [];
-        gameState.path = [];
-        gameState.totalDistance = 0;
-        gameState.energyUsed = 0;
-        gameState.isComplete = false;
-        
-        // Reset UI
-        updateUI();
-        
-        // Reset nodes
-        nodes.forEach(node => {
-            node.userData.selected = false;
-            node.material.color.setHex(node.userData.originalColor);
-            node.scale.set(1, 1, 1);
-        });
-        
-        // Hide all selection rings
-        rings.forEach(ring => {
-            ring.mesh.material.visible = false;
-        });
-        
-        // Remove lines
-        lines.forEach(line => {
-            scene.remove(line);
-        });
-        lines = [];
-        
-        // Reset active path line
-        activePathLine.geometry.dispose();
-        activePathLine.geometry = new THREE.BufferGeometry();
-        
-        // Resume auto-rotation if it was enabled
-        if (gameState.isAutoRotating) {
-            controls.autoRotate = true;
-        }
-        
-        // Hide completion modal if visible
-        completionModal.classList.remove('active');
-    }
+   // Reset the game
+   function resetGame() {
+       // Reset game state
+       gameState.selectedCountries = [];
+       gameState.path = [];
+       gameState.totalDistance = 0;
+       gameState.energyUsed = 0;
+       gameState.isComplete = false;
+       
+       // Reset UI
+       updateUI();
+       
+       // Reset nodes
+       nodes.forEach(node => {
+           node.userData.selected = false;
+           node.material.color.setHex(node.userData.originalColor);
+           node.scale.set(1, 1, 1);
+       });
+       
+       // Hide all selection rings
+       rings.forEach(ring => {
+           ring.mesh.material.visible = false;
+       });
+       
+       // Remove lines
+       lines.forEach(line => {
+           scene.remove(line);
+       });
+       lines = [];
+       
+       // Reset active path line
+       activePathLine.geometry.dispose();
+       activePathLine.geometry = new THREE.BufferGeometry();
+       
+       // Resume auto-rotation if it was enabled
+       if (gameState.isAutoRotating) {
+           controls.autoRotate = true;
+       }
+       
+       // Hide completion modal if visible
+       completionModal.classList.remove('active');
+   }
 
-    // Show completion modal
-    function showCompletionModal() {
-        resultDistance.textContent = `${Math.round(gameState.totalDistance)} km`;
-        resultEnergy.textContent = gameState.energyUsed;
-        resultCountries.textContent = gameState.selectedCountries.length;
-        resultPath.textContent = gameState.path.join(" → ");
-        
-        // Show modal with animation
-        gsap.to(completionModal, {
-            opacity: 1,
-            duration: 0.5,
-            onStart: () => {
-                completionModal.classList.add('active');
-            }
-        });
-    }
+   // Show completion modal
+   function showCompletionModal() {
+       resultDistance.textContent = `${Math.round(gameState.totalDistance)} km`;
+       resultEnergy.textContent = gameState.energyUsed;
+       resultCountries.textContent = gameState.selectedCountries.length;
+       resultPath.textContent = gameState.path.join(" → ");
+       
+       // Show modal with animation
+       gsap.to(completionModal, {
+           opacity: 1,
+           duration: 0.5,
+           onStart: () => {
+               completionModal.classList.add('active');
+           }
+       });
+   }
 
-    // Optimize route using nearest neighbor algorithm
-    function optimizeRoute() {
-        if (gameState.selectedCountries.length < 2) {
-            alert("Please select at least 2 countries before optimizing");
-            return;
-        }
-        
-        resetGame();
-        
-        // Start with first node
-        const startNode = nodes[0];
-        selectNode(startNode);
-        
-        // Use nearest neighbor algorithm
-        let currentNode = startNode;
-        let remainingNodes = nodes.filter(node => node !== startNode);
-        
-        while (remainingNodes.length > 0) {
-            // Find nearest unvisited node
-            let nearestNode = null;
-            let nearestDistance = Infinity;
-            
-            for (const node of remainingNodes) {
-                const distance = currentNode.position.distanceTo(node.position);
-                if (distance < nearestDistance) {
-                    nearestDistance = distance;
-                    nearestNode = node;
-                }
-            }
-            
-            // Select nearest node
-            selectNode(nearestNode);
-            rotateGlobeToNode(nearestNode);
-            
-            // Update current node and remaining nodes
-            currentNode = nearestNode;
-            remainingNodes = remainingNodes.filter(node => node !== nearestNode);
-        }
-        
-        // Complete route back to start
-        completeRoute();
-    }
+   // Optimize route using nearest neighbor algorithm
+   function optimizeRoute() {
+       if (gameState.selectedCountries.length < 2) {
+           alert("Please select at least 2 countries before optimizing");
+           return;
+       }
+       
+       resetGame();
+       
+       // Start with first node
+       const startNode = nodes[0];
+       selectNode(startNode);
+       
+       // Use nearest neighbor algorithm
+       let currentNode = startNode;
+       let remainingNodes = nodes.filter(node => node !== startNode);
+       
+       while (remainingNodes.length > 0) {
+           // Find nearest unvisited node
+           let nearestNode = null;
+           let nearestDistance = Infinity;
+           
+           for (const node of remainingNodes) {
+               const distance = currentNode.position.distanceTo(node.position);
+               if (distance < nearestDistance) {
+                   nearestDistance = distance;
+                   nearestNode = node;
+               }
+           }
+           
+           // Select nearest node
+           selectNode(nearestNode);
+           rotateGlobeToNode(nearestNode);
+           
+           // Update current node and remaining nodes
+           currentNode = nearestNode;
+           remainingNodes = remainingNodes.filter(node => node !== nearestNode);
+       }
+       
+       // Complete route back to start
+       completeRoute();
+   }
 
-    // Animation loop
-    function animate() {
-        requestAnimationFrame(animate);
-        
-        // Update controls
-        controls.update();
-        
-        // Rotate all visible selection rings to face the camera
-        rings.forEach(ring => {
-            if (ring.mesh.material.visible) {
-                ring.mesh.lookAt(camera.position);
-            }
-        });
-        
-        renderer.render(scene, camera);
-    }
+   // Play sound effect when selecting node - using shared AudioContext
+   function playSelectSound() {
+       // Skip if AudioContext couldn't be created
+       if (!audioContext) return;
+       
+       try {
+           const oscillator = audioContext.createOscillator();
+           const gainNode = audioContext.createGain();
+           
+           oscillator.connect(gainNode);
+           gainNode.connect(audioContext.destination);
+           
+           oscillator.type = 'sine';
+           oscillator.frequency.setValueAtTime(440, audioContext.currentTime);
+           gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+           
+           oscillator.start();
+           
+           // Add frequency modulation for more interesting sound
+           oscillator.frequency.exponentialRampToValueAtTime(
+               880, 
+               audioContext.currentTime + 0.1
+           );
+           
+           // Add fade out
+           gainNode.gain.exponentialRampToValueAtTime(
+               0.001,
+               audioContext.currentTime + 0.3
+           );
+           
+           oscillator.stop(audioContext.currentTime + 0.3);
+       } catch (error) {
+           console.error("Error playing sound:", error);
+       }
+   }
 
-    // Initialize the scene and start animation
-    initScene();
-    animate();
+   // Animation loop
+   function animate() {
+       requestAnimationFrame(animate);
+       
+       // Update controls
+       controls.update();
+       
+       // Rotate all visible selection rings to face the camera
+       rings.forEach(ring => {
+           if (ring.mesh.material.visible) {
+               ring.mesh.lookAt(camera.position);
+           }
+       });
+       
+       renderer.render(scene, camera);
+   }
 
-    // Event listeners for buttons
-    resetBtn.addEventListener('click', resetGame);
-    optimizeBtn.addEventListener('click', optimizeRoute);
-    completeBtn.addEventListener('click', completeRoute);
-    newGameBtn.addEventListener('click', resetGame);
+   // Initialize the scene and start animation
+   initScene();
+   animate();
 
-    // Add auto-rotation toggle button
-    const autoRotateBtn = document.createElement('button');
-    autoRotateBtn.className = 'glow-button';
-    autoRotateBtn.textContent = 'AUTO ROTATE';
-    autoRotateBtn.style.marginRight = '10px';
-    document.querySelector('.control-panel').prepend(autoRotateBtn);
+   // Event listeners for buttons
+   resetBtn.addEventListener('click', resetGame);
+   optimizeBtn.addEventListener('click', optimizeRoute);
+   completeBtn.addEventListener('click', completeRoute);
+   newGameBtn.addEventListener('click', resetGame);
 
-    autoRotateBtn.addEventListener('click', () => {
-        gameState.isAutoRotating = !gameState.isAutoRotating;
-        controls.autoRotate = gameState.isAutoRotating;
-        autoRotateBtn.textContent = gameState.isAutoRotating ? 'STOP ROTATION' : 'AUTO ROTATE';
-    });
+   // Add auto-rotation toggle button
+   const autoRotateBtn = document.createElement('button');
+   autoRotateBtn.className = 'glow-button';
+   autoRotateBtn.textContent = 'AUTO ROTATE';
+   autoRotateBtn.style.marginRight = '10px';
+   document.querySelector('.control-panel').prepend(autoRotateBtn);
+
+   autoRotateBtn.addEventListener('click', () => {
+       gameState.isAutoRotating = !gameState.isAutoRotating;
+       controls.autoRotate = gameState.isAutoRotating;
+       autoRotateBtn.textContent = gameState.isAutoRotating ? 'STOP ROTATION' : 'AUTO ROTATE';
+   });
 });
