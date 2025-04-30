@@ -97,6 +97,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Create raycaster for mouse interaction
         raycaster = new THREE.Raycaster();
+        raycaster.params.Points.threshold = 5; // Increase threshold for easier clicking
         mouse = new THREE.Vector2();
 
         // Add OrbitControls for 360° user control
@@ -144,6 +145,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Create country nodes
         createNodes();
+        
+        // Add larger hitboxes for better clicking
+        createClickHitboxes();
 
         // Add event listeners
         window.addEventListener('resize', onWindowResize);
@@ -188,16 +192,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Create the globe with just the color texture
                 const globeMaterial = new THREE.MeshPhongMaterial({
                     map: globeTexture,
-                    shininess: 15
+                    shininess: 15,
+                    transparent: true, // Make globe transparent
+                    opacity: 0.9,     // Slightly transparent to help with clicks
                 });
                 
                 globe = new THREE.Mesh(globeGeometry, globeMaterial);
+                // Set a lower renderOrder for the globe so nodes can be clicked
+                globe.renderOrder = 1;
                 scene.add(globe);
                 
-                // Add atmosphere glow
-                addAtmosphereAndGrid();
-                
                 // Continue with the rest of the loading process
+                addAtmosphereAndGrid();
                 updateLoadingProgress(3, 3);
             },
             undefined,
@@ -228,9 +234,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             `,
             blending: THREE.AdditiveBlending,
-            side: THREE.BackSide
+            side: THREE.BackSide,
+            transparent: true,
+            depthWrite: false  // Prevent depth writing to allow clicking through
         });
         const atmosphere = new THREE.Mesh(atmosphereGeometry, atmosphereMaterial);
+        atmosphere.renderOrder = 0; // Lowest render order
         scene.add(atmosphere);
         
         // Add grid lines
@@ -239,9 +248,11 @@ document.addEventListener('DOMContentLoaded', () => {
             color: 0x00e5ff,
             transparent: true,
             opacity: 0.1,
-            wireframe: true
+            wireframe: true,
+            depthWrite: false  // Prevent depth writing to allow clicking through
         });
         const grid = new THREE.Mesh(gridGeometry, gridMaterial);
+        grid.renderOrder = 2; // Low render order
         scene.add(grid);
     }
 
@@ -263,13 +274,15 @@ document.addEventListener('DOMContentLoaded', () => {
             specular: 0x333333,
             shininess: 25,
             transparent: true,
-            opacity: 0.9
+            opacity: 0.9,
+            depthWrite: true
         });
         
         globe = new THREE.Mesh(globeGeometry, globeMaterial);
         
         // Ensure the globe is at the center of the scene
         globe.position.set(0, 0, 0);
+        globe.renderOrder = 1;
         
         // Make sure the globe is visible
         globe.visible = true;
@@ -286,14 +299,45 @@ document.addEventListener('DOMContentLoaded', () => {
             color: 0x00e5ff,
             wireframe: true,
             transparent: true,
-            opacity: 0.2
+            opacity: 0.2,
+            depthWrite: false
         });
         
         const wireframe = new THREE.Mesh(wireframeGeometry, wireframeMaterial);
+        wireframe.renderOrder = 2;
         scene.add(wireframe);
         
         // Continue with the rest of the loading process
         updateLoadingProgress(3, 3);
+    }
+    
+    // Add specific click hitbox objects for better click detection
+    function createClickHitboxes() {
+        // This function adds additional invisible hitbox spheres around each node
+        // to make them easier to click
+        countryNodes.forEach((country, index) => {
+            if (nodes[index]) {
+                const position = nodes[index].position.clone();
+                const hitboxGeometry = new THREE.SphereGeometry(NODE_RADIUS * 4, 8, 8);
+                const hitboxMaterial = new THREE.MeshBasicMaterial({
+                    color: 0xffffff,
+                    transparent: true,
+                    opacity: 0.0,  // Completely invisible
+                    depthWrite: false
+                });
+                
+                const hitbox = new THREE.Mesh(hitboxGeometry, hitboxMaterial);
+                hitbox.position.copy(position);
+                hitbox.renderOrder = 200; // Highest render order
+                hitbox.userData = nodes[index].userData; // Copy userData from original node
+                
+                scene.add(hitbox);
+                // Add hitbox to nodes array so it's included in raycaster checks
+                nodes.push(hitbox);
+            }
+        });
+        
+        console.log("Created larger hitboxes for better click detection");
     }
     
     // Update loading progress
@@ -399,18 +443,23 @@ document.addEventListener('DOMContentLoaded', () => {
             const glowMaterial = new THREE.MeshBasicMaterial({
                 color: country.color,
                 transparent: true,
-                opacity: 0.3
+                opacity: 0.3,
+                depthWrite: false
             });
             const glow = new THREE.Mesh(glowGeometry, glowMaterial);
             glow.position.copy(position);
+            glow.renderOrder = 5; // Lower render order
             scene.add(glow);
             
-            // Create node
-            const nodeGeometry = new THREE.SphereGeometry(NODE_RADIUS, 16, 16);
-            const nodeMaterial = new THREE.MeshBasicMaterial({ color: country.color });
+            // Create node with LARGER radius for easier clicking
+            const nodeGeometry = new THREE.SphereGeometry(NODE_RADIUS * 1.5, 16, 16);
+            const nodeMaterial = new THREE.MeshBasicMaterial({ 
+                color: country.color,
+                depthWrite: true
+            });
             const node = new THREE.Mesh(nodeGeometry, nodeMaterial);
             node.position.copy(position);
-            node.renderOrder = 10; // Ensure nodes render on top
+            node.renderOrder = 100; // High render order
             node.userData = {
                 id: country.id,
                 name: country.name,
@@ -431,11 +480,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 side: THREE.DoubleSide,
                 transparent: true,
                 opacity: 0.8,
-                visible: false
+                visible: false,
+                depthWrite: false
             });
             const ring = new THREE.Mesh(ringGeometry, ringMaterial);
             ring.position.copy(position);
-            ring.renderOrder = 11; // Ensure rings render on top of nodes
+            ring.renderOrder = 90; // Higher than globe but lower than nodes
             
             // Orient ring to face camera
             const lookAt = position.clone().multiplyScalar(2);
@@ -593,49 +643,60 @@ document.addEventListener('DOMContentLoaded', () => {
         mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
         mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
         
+        console.log("Click detected at:", mouse.x, mouse.y);
+        
         // Stop auto-rotation on click
         controls.autoRotate = false;
         
-        // Use setTimeout to ensure the click is processed after controls
-        setTimeout(() => {
-            // Get clicked node
-            raycaster.setFromCamera(mouse, camera);
-            const intersects = raycaster.intersectObjects(nodes);
+        // Set raycaster with larger threshold for easier clicking
+        raycaster.params.Points.threshold = 5;
+        raycaster.setFromCamera(mouse, camera);
+        
+        // Log all objects in the scene for debugging
+        console.log("Total nodes in scene:", nodes.length);
+        
+        // Get intersections with nodes
+        const intersects = raycaster.intersectObjects(nodes);
+        console.log("Intersections found:", intersects.length);
+        
+        if (intersects.length > 0) {
+            const clickedNode = intersects[0].object;
+            const nodeId = clickedNode.userData.id;
             
-            if (intersects.length > 0) {
-                const clickedNode = intersects[0].object;
-                const nodeId = clickedNode.userData.id;
-                
-                // Check if node is already selected
-                if (gameState.path.includes(nodeId)) {
-                    return;
-                }
-                
-                // Select node
-                selectNode(clickedNode);
-                
-                // Rotate globe to center on selected node
-                rotateGlobeToNode(clickedNode);
-                
-                // Update path
-                updatePath();
-                
-                // Update the active path line
-                updatePathLine();
-                
-                // Play sound effect
-                playSelectSound();
-                
-                // Resume auto-rotation after a delay if enabled
-                if (gameState.isAutoRotating) {
-                    setTimeout(() => {
-                        if (!gameState.isDragging) {
-                            controls.autoRotate = true;
-                        }
-                    }, 5000); // Resume after 5 seconds
-                }
+            console.log("Node clicked:", clickedNode.userData.name);
+            
+            // Check if node is already selected
+            if (gameState.path.includes(nodeId)) {
+                console.log("Node already in path, skipping");
+                return;
             }
-        }, 10); // Small delay to ensure proper event handling
+            
+            // Select node
+            selectNode(clickedNode);
+            
+            // Rotate globe to center on selected node
+            rotateGlobeToNode(clickedNode);
+            
+            // Update path
+            updatePath();
+            
+            // Update the active path line
+            updatePathLine();
+            
+            // Play sound effect
+            playSelectSound();
+            
+            // Resume auto-rotation after a delay if enabled
+            if (gameState.isAutoRotating) {
+                setTimeout(() => {
+                    if (!gameState.isDragging) {
+                        controls.autoRotate = true;
+                    }
+                }, 5000); // Resume after 5 seconds
+            }
+        } else {
+            console.log("No node was clicked");
+        }
     }
 
     // Select a node
@@ -644,17 +705,26 @@ document.addEventListener('DOMContentLoaded', () => {
         node.userData.selected = true;
         node.material.color.setHex(SELECTED_COLOR);
         
+        // Find the original node if this is a hitbox
+        const originalNodeIndex = nodes.findIndex(n => 
+            n.userData.id === node.userData.id && 
+            n.geometry.type === "SphereGeometry" && 
+            n.geometry.parameters.radius === NODE_RADIUS * 1.5
+        );
+        
+        const nodeToUse = originalNodeIndex !== -1 ? nodes[originalNodeIndex] : node;
+        
         // Add node to selected list
         gameState.selectedCountries.push({
-            id: node.userData.id,
-            name: node.userData.name,
-            position: node.position.clone(),
-            lat: countryNodes.find(n => n.id === node.userData.id).lat,
-            lng: countryNodes.find(n => n.id === node.userData.id).lng
+            id: nodeToUse.userData.id,
+            name: nodeToUse.userData.name,
+            position: nodeToUse.position.clone(),
+            lat: countryNodes.find(n => n.id === nodeToUse.userData.id).lat,
+            lng: countryNodes.find(n => n.id === nodeToUse.userData.id).lng
         });
         
         // Add node ID to path
-        gameState.path.push(node.userData.id);
+        gameState.path.push(nodeToUse.userData.id);
         
         // If this is not the first node, add a line to previous node
         if (gameState.selectedCountries.length > 1) {
@@ -668,7 +738,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         // Show and animate the selection ring
-        const ring = rings.find(r => r.nodeId === node.userData.id);
+        const ring = rings.find(r => r.nodeId === nodeToUse.userData.id);
         if (ring) {
             ring.mesh.material.visible = true;
             // Animate the selection ring
@@ -684,7 +754,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         // Scale up the node itself
-        gsap.to(node.scale, {
+        gsap.to(nodeToUse.scale, {
             x: 1.5, y: 1.5, z: 1.5,
             duration: 0.3,
             ease: "back.out"
@@ -709,83 +779,83 @@ document.addEventListener('DOMContentLoaded', () => {
         midPoint.normalize();
         midPoint.multiplyScalar(GLOBE_RADIUS * 1.2);
         points.push(midPoint);
-        
         points.push(endPos);
-        
-        const curvePoints = new THREE.CatmullRomCurve3(points).getPoints(50);
-        const geometry = new THREE.BufferGeometry().setFromPoints(curvePoints);
-        const line = new THREE.Line(geometry, material);
-        
-        // Animate the line drawing
-        const initialPoints = [startPos];
-        const initialGeometry = new THREE.BufferGeometry().setFromPoints(initialPoints);
-        line.geometry = initialGeometry;
-        
-        scene.add(line);
-        lines.push(line);
-        
-        // Animate line drawing
-        let step = 0;
-        const totalSteps = curvePoints.length;
-        const lineDrawingInterval = setInterval(() => {
-            step++;
-            if (step >= totalSteps) {
-                clearInterval(lineDrawingInterval);
-                return;
-            }
-            
-            const visiblePoints = curvePoints.slice(0, step + 1);
-            const updatedGeometry = new THREE.BufferGeometry().setFromPoints(visiblePoints);
-            line.geometry.dispose();
-            line.geometry = updatedGeometry;
-        }, 20);
-    }
+       
+       const curvePoints = new THREE.CatmullRomCurve3(points).getPoints(50);
+       const geometry = new THREE.BufferGeometry().setFromPoints(curvePoints);
+       const line = new THREE.Line(geometry, material);
+       line.renderOrder = 50; // Between globe and nodes
+       
+       // Animate the line drawing
+       const initialPoints = [startPos];
+       const initialGeometry = new THREE.BufferGeometry().setFromPoints(initialPoints);
+       line.geometry = initialGeometry;
+       
+       scene.add(line);
+       lines.push(line);
+       
+       // Animate line drawing
+       let step = 0;
+       const totalSteps = curvePoints.length;
+       const lineDrawingInterval = setInterval(() => {
+           step++;
+           if (step >= totalSteps) {
+               clearInterval(lineDrawingInterval);
+               return;
+           }
+           
+           const visiblePoints = curvePoints.slice(0, step + 1);
+           const updatedGeometry = new THREE.BufferGeometry().setFromPoints(visiblePoints);
+           line.geometry.dispose();
+           line.geometry = updatedGeometry;
+       }, 20);
+   }
 
-    // Calculate distance between nodes
-    function calculateDistance() {
-        const lastIdx = gameState.selectedCountries.length - 1;
-        const start = gameState.selectedCountries[lastIdx - 1];
-        const end = gameState.selectedCountries[lastIdx];
-        
-        // Use Haversine formula to calculate distance
-        const distance = calculateHaversineDistance(
-            start.lat,
-            start.lng,
-            end.lat,
-            end.lng
-        );
-        
-        gameState.totalDistance += distance;
-        gameState.energyUsed += Math.round(distance / 100);
-    }
+   // Calculate distance between nodes
+   function calculateDistance() {
+       const lastIdx = gameState.selectedCountries.length - 1;
+       const start = gameState.selectedCountries[lastIdx - 1];
+       const end = gameState.selectedCountries[lastIdx];
+       
+       // Use Haversine formula to calculate distance
+       const distance = calculateHaversineDistance(
+           start.lat,
+           start.lng,
+           end.lat,
+           end.lng
+       );
+       
+       gameState.totalDistance += distance;
+       gameState.energyUsed += Math.round(distance / 100);
+   }
 
-    // Calculate Haversine distance (great-circle distance between two points)
-    function calculateHaversineDistance(lat1, lon1, lat2, lon2) {
-        const R = 6371; // Earth's radius in km
-        const dLat = (lat2 - lat1) * Math.PI / 180;
-        const dLon = (lon2 - lon1) * Math.PI / 180;
-        
-        const a = 
-            Math.sin(dLat/2) * Math.sin(dLat/2) +
-            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-            Math.sin(dLon/2) * Math.sin(dLon/2);
-            
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-        return R * c;
-    }
+   // Calculate Haversine distance (great-circle distance between two points)
+   function calculateHaversineDistance(lat1, lon1, lat2, lon2) {
+       const R = 6371; // Earth's radius in km
+       const dLat = (lat2 - lat1) * Math.PI / 180;
+       const dLon = (lon2 - lon1) * Math.PI / 180;
+       
+       const a = 
+           Math.sin(dLat/2) * Math.sin(dLat/2) +
+           Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+           Math.sin(dLon/2) * Math.sin(dLon/2);
+           
+       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+       return R * c;
+   }
 
-    // Update UI with optional animation
-    function updateUI(animate = false) {
-        // Update path display
-        if (gameState.path.length === 0) {
-            pathSequence.textContent = "Start your journey";
-        } else {
-            pathSequence.textContent = gameState.path.join(" → ");
-        }
-        
-        // Update stats with optional animation
-        if (animate) {
-            // Animate distance counter
+   // Update UI with optional animation
+   function updateUI(animate = false) {
+       // Update path display
+       if (gameState.path.length === 0) {
+           pathSequence.textContent = "Start your journey";
+       } else {
+           pathSequence.textContent = gameState.path.join(" → ");
+       }
+       
+       // Update stats with optional animation
+       if (animate) {
+           // Animate distance counter
            const prevDistance = parseFloat(totalDistance.textContent) || 0;
            const distanceValue = Math.round(gameState.totalDistance);
            animateCounter(totalDistance, prevDistance, distanceValue, ' km');
@@ -913,9 +983,11 @@ document.addEventListener('DOMContentLoaded', () => {
        
        // Reset nodes
        nodes.forEach(node => {
-           node.userData.selected = false;
-           node.material.color.setHex(node.userData.originalColor);
-           node.scale.set(1, 1, 1);
+           if (node.userData && node.userData.selected !== undefined) {
+               node.userData.selected = false;
+               node.material.color.setHex(node.userData.originalColor || DEFAULT_COLOR);
+               node.scale.set(1, 1, 1);
+           }
        });
        
        // Hide all selection rings
@@ -969,12 +1041,24 @@ document.addEventListener('DOMContentLoaded', () => {
        resetGame();
        
        // Start with first node
-       const startNode = nodes[0];
+       const startNode = nodes.find(node => node.userData && node.userData.id === 1);
+       if (!startNode) {
+           console.error("Cannot find start node for optimization");
+           return;
+       }
+       
        selectNode(startNode);
        
        // Use nearest neighbor algorithm
        let currentNode = startNode;
-       let remainingNodes = nodes.filter(node => node !== startNode);
+       let remainingNodes = nodes.filter(node => 
+           node.userData && 
+           node.userData.id && 
+           node.userData.id !== startNode.userData.id &&
+           // Only include actual nodes, not hitboxes
+           node.geometry.type === "SphereGeometry" && 
+           node.geometry.parameters.radius === NODE_RADIUS * 1.5
+       );
        
        while (remainingNodes.length > 0) {
            // Find nearest unvisited node
@@ -989,13 +1073,18 @@ document.addEventListener('DOMContentLoaded', () => {
                }
            }
            
-           // Select nearest node
-           selectNode(nearestNode);
-           rotateGlobeToNode(nearestNode);
-           
-           // Update current node and remaining nodes
-           currentNode = nearestNode;
-           remainingNodes = remainingNodes.filter(node => node !== nearestNode);
+           if (nearestNode) {
+               // Select nearest node
+               selectNode(nearestNode);
+               rotateGlobeToNode(nearestNode);
+               
+               // Update current node and remaining nodes
+               currentNode = nearestNode;
+               remainingNodes = remainingNodes.filter(node => node !== nearestNode);
+           } else {
+               console.error("Cannot find nearest node");
+               break;
+           }
        }
        
        // Complete route back to start
