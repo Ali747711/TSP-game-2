@@ -43,6 +43,14 @@ document.addEventListener('DOMContentLoaded', () => {
         isAutoRotating: false
     };
 
+    // Create a single AudioContext for better performance
+    let audioContext;
+    try {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    } catch (error) {
+        console.error("AudioContext could not be created:", error);
+    }
+
     // Country node data - using major cities with their coordinates
     const countryNodes = [
         { id: 1, name: "New York", lat: 40.7128, lng: -74.0060, color: 0x00e5ff, info: "United States - North America" },
@@ -91,8 +99,8 @@ document.addEventListener('DOMContentLoaded', () => {
         raycaster = new THREE.Raycaster();
         mouse = new THREE.Vector2();
 
-        // Add OrbitControls for 360° user control
-        controls = new THREE.OrbitControls(camera, renderer.domElement);
+        // Add OrbitControls for 360° user control - FIXED: proper reference to OrbitControls
+        controls = new OrbitControls(camera, renderer.domElement);
         controls.enableZoom = true;
         controls.enablePan = true;
         controls.enableRotate = true;
@@ -174,6 +182,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Track loading progress
         let loadedCount = 0;
         const totalTextures = 3;
+        let hasLoadingError = false;
         
         const updateLoadingProgress = () => {
             loadedCount++;
@@ -185,22 +194,49 @@ document.addEventListener('DOMContentLoaded', () => {
                 progressFill.style.width = `${progress * 100}%`;
                 loadingText.textContent = `Loading world data... ${Math.round(progress * 100)}%`;
             }
+            
+            // If all textures loaded, check for errors
+            if (loadedCount === totalTextures && !hasLoadingError) {
+                // Continue loading process if no errors
+                setTimeout(() => {
+                    revealGlobe();
+                }, 1000);
+            }
         };
         
-        // Load textures with progress tracking
+        // Error handling for texture loading
+        const onTextureError = (err) => {
+            console.error('Error loading texture:', err);
+            hasLoadingError = true;
+            
+            // Show error message in loading screen
+            const loadingText = document.querySelector('.loading-text');
+            if (loadingText) {
+                loadingText.textContent = 'Error loading textures. Please refresh the page.';
+                loadingText.style.color = '#ff0000';
+            }
+        };
+        
+        // Load textures with progress tracking and error handling
         const globeTexture = textureLoader.load(
             'https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-blue-marble.jpg',
-            updateLoadingProgress
+            updateLoadingProgress,
+            undefined, // onProgress is not used
+            onTextureError
         );
         
         const bumpTexture = textureLoader.load(
             'https://cdn.jsdelivr.net/gh/dragonir/3d/src/Earth/images/elev_bump_16k.jpg',
-            updateLoadingProgress
+            updateLoadingProgress,
+            undefined,
+            onTextureError
         );
         
         const specularTexture = textureLoader.load(
             'https://cdn.jsdelivr.net/gh/dragonir/3d/src/Earth/images/water_16k.png',
-            updateLoadingProgress
+            updateLoadingProgress,
+            undefined,
+            onTextureError
         );
         
         const globeMaterial = new THREE.MeshPhongMaterial({
@@ -250,6 +286,44 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         const grid = new THREE.Mesh(gridGeometry, gridMaterial);
         scene.add(grid);
+    }
+
+    // Reveal globe with animation - separated from simulateLoading
+    function revealGlobe() {
+        // Fade out loading screen
+        const loadingScreen = document.querySelector('.loading-screen');
+        if (loadingScreen) {
+            loadingScreen.style.opacity = '0';
+            
+            // Reveal globe with animation
+            globe.scale.set(0.01, 0.01, 0.01);
+            camera.position.z = 500;
+            
+            // Zoom in animation
+            gsap.to(globe.scale, {
+                x: 1,
+                y: 1,
+                z: 1,
+                duration: 2.5,
+                ease: "power2.out"
+            });
+            
+            gsap.to(camera.position, {
+                z: 250,
+                duration: 2.5,
+                ease: "power2.out",
+                onComplete: () => {
+                    // Start auto rotation after loading
+                    controls.autoRotate = true;
+                    gameState.isAutoRotating = true;
+                    
+                    // Remove loading screen from DOM
+                    setTimeout(() => {
+                        loadingScreen.remove();
+                    }, 1000);
+                }
+            });
+        }
     }
 
     // Create nodes for each country
@@ -356,45 +430,16 @@ document.addEventListener('DOMContentLoaded', () => {
         return new THREE.Vector3(x, y, z);
     }
     
-    // Simulate loading process and reveal globe with animation
+    // Simulate loading process 
     function simulateLoading() {
-        // Ensure at least 2 seconds of loading animation
-        setTimeout(() => {
-            if (document.querySelector('.loading-screen')) {
-                // Fade out loading screen
-                const loadingScreen = document.querySelector('.loading-screen');
-                loadingScreen.style.opacity = '0';
-                
-                // Reveal globe with animation
-                globe.scale.set(0.01, 0.01, 0.01);
-                camera.position.z = 500;
-                
-                // Zoom in animation
-                gsap.to(globe.scale, {
-                    x: 1,
-                    y: 1,
-                    z: 1,
-                    duration: 2.5,
-                    ease: "power2.out"
-                });
-                
-                gsap.to(camera.position, {
-                    z: 250,
-                    duration: 2.5,
-                    ease: "power2.out",
-                    onComplete: () => {
-                        // Start auto rotation after loading
-                        controls.autoRotate = true;
-                        gameState.isAutoRotating = true;
-                        
-                        // Remove loading screen from DOM
-                        setTimeout(() => {
-                            loadingScreen.remove();
-                        }, 1000);
-                    }
-                });
-            }
-        }, 2000);
+        // Just start the loading progress - texture loading will determine completion
+        const progressFill = document.querySelector('.progress-fill');
+        const loadingText = document.querySelector('.loading-text');
+        
+        if (progressFill && loadingText) {
+            progressFill.style.width = "5%";
+            loadingText.textContent = "Loading world data... 5%";
+        }
     }
 
     // Animate glow effect
@@ -773,7 +818,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         // Get first and last nodes
-        // Complete the route (return to start) - continuation
         const firstNode = gameState.selectedCountries[0];
         const lastNode = gameState.selectedCountries[gameState.selectedCountries.length - 1];
         
@@ -907,34 +951,40 @@ document.addEventListener('DOMContentLoaded', () => {
         completeRoute();
     }
 
-    // Play sound effect when selecting node
+    // Play sound effect when selecting node - using shared AudioContext
     function playSelectSound() {
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        const oscillator = audioContext.createOscillator();
-        const gainNode = audioContext.createGain();
+        // Skip if AudioContext couldn't be created
+        if (!audioContext) return;
         
-        oscillator.connect(gainNode);
-        gainNode.connect(audioContext.destination);
-        
-        oscillator.type = 'sine';
-        oscillator.frequency.setValueAtTime(440, audioContext.currentTime);
-        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-        
-        oscillator.start();
-        
-        // Add frequency modulation for more interesting sound
-        oscillator.frequency.exponentialRampToValueAtTime(
-            880, 
-            audioContext.currentTime + 0.1
-        );
-        
-        // Add fade out
-        gainNode.gain.exponentialRampToValueAtTime(
-            0.001,
-            audioContext.currentTime + 0.3
-        );
-        
-        oscillator.stop(audioContext.currentTime + 0.3);
+        try {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(440, audioContext.currentTime);
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            
+            oscillator.start();
+            
+            // Add frequency modulation for more interesting sound
+            oscillator.frequency.exponentialRampToValueAtTime(
+                880, 
+                audioContext.currentTime + 0.1
+            );
+            
+            // Add fade out
+            gainNode.gain.exponentialRampToValueAtTime(
+                0.001,
+                audioContext.currentTime + 0.3
+            );
+            
+            oscillator.stop(audioContext.currentTime + 0.3);
+        } catch (error) {
+            console.error("Error playing sound:", error);
+        }
     }
 
     // Animation loop
