@@ -64,7 +64,13 @@ document.addEventListener('DOMContentLoaded', () => {
         { id: 9, name: "Mumbai", lat: 19.0760, lng: 72.8777, color: 0x00e5ff, info: "India - Asia" },
         { id: 10, name: "Cape Town", lat: -33.9249, lng: 18.4241, color: 0x00e5ff, info: "South Africa - Africa" },
         { id: 11, name: "Mexico City", lat: 19.4326, lng: -99.1332, color: 0x00e5ff, info: "Mexico - North America" },
-        { id: 12, name: "Berlin", lat: 52.5200, lng: 13.4050, color: 0x00e5ff, info: "Germany - Europe" }
+        { id: 12, name: "Berlin", lat: 52.5200, lng: 13.4050, color: 0x00e5ff, info: "Germany - Europe" },
+        { id: 13, name: "Kokand", lat: 40.5289, lng: 70.9430, color: 0x00e5ff, info: "Uzbekistan - Central Asia" },
+        { id: 14, name: "Jakarta", lat: -6.2088, lng: 106.8456, color: 0x00e5ff, info: "Indonesia - Southeast Asia" },
+        { id: 15, name: "Busan", lat: 35.1796, lng: 129.0756, color: 0x00e5ff, info: "South Korea - East Asia" },
+        { id: 16, name: "Gaza", lat: 31.5017, lng: 34.4668, color: 0x00e5ff, info: "Palestine - Middle East" },
+        { id: 17, name: "Istanbul", lat: 41.0082, lng: 28.9784, color: 0x00e5ff, info: "Turkey - Europe/Asia" },
+        { id: 18, name: "Pyongyang", lat: 39.0392, lng: 125.7625, color: 0x00e5ff, info: "North Korea - East Asia" }
     ];
 
     // Three.js Variables
